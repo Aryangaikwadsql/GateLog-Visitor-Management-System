@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if request.auth != null && (
+        request.auth.token.role == "watchman" || 
+        request.auth.token.role == "committee" || 
+        request.auth.uid == userId
+      );
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Visitors collection
+    match /visitors/{visitorId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll([
+          'name',
+          'phoneNumber',
+          'purpose',
+          'vehicleNumber',
+          'residentName',
+          'residentId',
+          'timestamp',
+          'status',
+          'addedBy'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.purpose is string
+        && (request.resource.data.vehicleNumber is string || request.resource.data.vehicleNumber == null)
+        && request.resource.data.residentName is string
+        && request.resource.data.residentId is string
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.status is string
+        && request.resource.data.addedBy is string
+        && request.resource.data.addedBy == request.auth.uid;
+
+      // Allow committee members to approve (update) any visitor
+      // Allow residents to update visitor status for their own visitors
+      allow update: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "committee"
+          || (request.resource.data.residentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.residentId)
+        );
+
+      allow delete: if false;
+    }
+  }
+
+  // PanicAlerts collection
+  // Removed panic button rules as per user request
+}
